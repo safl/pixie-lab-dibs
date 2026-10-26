@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: publish
+
+# A version tag publishes that version to PyPI, as calldibs. The upload uses
+# PyPI's trusted publishing, so no token is stored here: PyPI accepts it
+# because it comes from this workflow in this repository.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7.2.1
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: make format
+        run: make format PRECOMMIT="uvx pre-commit"
+
+      - name: make check
+        run: make check
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7.2.1
+        with:
+          python-version: "3.13"
+
+      # Without this, a tag that does not match __version__ would publish
+      # the version in the code under a release named after the tag.
+      - name: Check the tag matches the version
+        run: |
+          version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/dibs/__init__.py)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "tag $GITHUB_REF_NAME does not match __version__ $version" >&2
+            exit 1
+          fi
+
+      - name: make build
+        run: make build
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

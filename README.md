@@ -209,6 +209,20 @@ no login; claim and release take `Authorization: Bearer <token>`.
 A claim or release blocked by someone else's claim answers 409 with
 the blocking claims' sentences in `detail.claimed`.
 
+## Releasing
+
+Set the version in `src/dibs/__init__.py`, move the changelog's
+`Unreleased` entries under that version, commit, and push a tag named
+after it:
+
+```
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The tag runs the publish workflow, which checks the tag matches the
+version, runs the checks, and uploads `calldibs` to PyPI through trusted
+publishing.
+
 ## License
 
 BSD-3-Clause. The repository follows [REUSE](https://reuse.software):

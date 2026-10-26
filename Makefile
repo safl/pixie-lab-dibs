@@ -6,6 +6,7 @@
 # targets, so everything CI does can be run locally. Run "make" for the list.
 
 UV ?= uv
+PRECOMMIT ?= pre-commit
 
 .DEFAULT_GOAL := help
 .PHONY: help format lint typecheck test build check
@@ -15,7 +16,7 @@ help: ## Show this help
 		| awk 'BEGIN{FS=":.*?## "}{printf "  %-10s %s\n", $$1, $$2}'
 
 format: ## Run every pre-commit hook: ruff, mdformat, reuse, ASCII punctuation
-	pre-commit run --all-files
+	$(PRECOMMIT) run --all-files
 
 lint: ## ruff check
 	$(UV) run ruff check .
