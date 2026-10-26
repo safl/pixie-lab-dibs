@@ -10,6 +10,12 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `dibs register` with a name that is already registered crashed with a
+  traceback instead of saying so. The client read every 409 as a claim
+  conflict.
+
 ## [0.3.0] - 2026-10-27
 
 ### Added

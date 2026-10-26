@@ -337,3 +337,11 @@ def test_session_tags_are_fresh_and_valid(capsys) -> None:
         assert validate_session(tag) == tag
         tags.add(tag)
     assert len(tags) == 20
+
+
+def test_registering_a_taken_name_is_an_error_not_a_crash(run: Run, ssh_key: Path, capsys) -> None:
+    pub = str(ssh_key.with_suffix(".pub"))
+    assert run("register", "erin", "-i", pub, who=None) == 0
+    capsys.readouterr()
+    assert run("register", "erin", "-i", pub, who=None) == cli.EXIT_ERROR
+    assert "already registered" in capsys.readouterr().err

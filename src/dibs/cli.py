@@ -25,6 +25,7 @@ else, 2 anything else (usage, unknown thing, server unreachable).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -186,9 +187,12 @@ def _request(url: str, method: str, path: str, body: dict[str, Any] | None = Non
         r = httpx.request(method, url.rstrip("/") + path, json=body, headers=headers, timeout=10)
     except httpx.HTTPError as exc:
         raise CliError(f"cannot reach dibs at {url}: {exc}") from exc
-    if r.status_code == 409:
-        raise Refused(r.json()["detail"]["claimed"])
     if r.status_code >= 400:
+        # A 409 is a claim conflict only when it lists the blocking claims;
+        # registering a taken name is a 409 with a plain message.
+        with contextlib.suppress(ValueError, TypeError, KeyError):
+            claimed = r.json()["detail"]["claimed"]
+            raise Refused(list(claimed))
         try:
             detail = r.json().get("detail", r.text)
         except ValueError:
