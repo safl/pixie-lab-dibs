@@ -145,6 +145,12 @@ the thing (`bmc = "10.20.30.82"`) rather than a part.
 
 ### AI-agents
 
+Every dibs server explains itself at `/agents`: how to set up for this
+very server, with its URL filled in, what is claimed right now, and the
+rules below. So the one thing to tell a person or an agent about a lab
+is "before touching its machines, read `http://dibs:8090/agents`", in a
+prompt, a project's `AGENTS.md`, or a message.
+
 For Claude Code, install the skill that teaches an agent all of this,
 and it applies whenever the agent is about to use a lab machine:
 
@@ -235,6 +241,7 @@ no login; claim and release take `Authorization: Bearer <token>`.
 | `POST /auth/register`      | `{"user": "...", "pubkey": "ssh-ed25519 ..."}`                                               |
 | `POST /auth/challenge`     | `{"user": "..."}` gives a nonce and the message to sign                                      |
 | `POST /auth/login`         | `{"user", "nonce", "signature"}` gives a token                                               |
+| `GET /agents`              | how to use this server, for a person or an agent, as text                                    |
 | `GET /login.sh`            | the login hook                                                                               |
 
 A claim or release blocked by someone else's claim answers 409 with

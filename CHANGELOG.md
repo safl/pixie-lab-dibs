@@ -10,6 +10,12 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `GET /agents` explains the server to whoever is pointed at it: setup
+  with this server's URL filled in, what is claimed right now, and the
+  agent skill's rules. The web page links to it.
+
 ## [0.2.0] - 2026-10-27
 
 ### Added
