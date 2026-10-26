@@ -10,6 +10,17 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Parts: a thing can have parts named `<thing>.<part>`, claimable on
+  their own. Claiming the thing covers its parts, so it conflicts with
+  another user's claim on any part, and a part conflicts with another
+  user's claim on the thing. Forcing the thing takes over its parts.
+- `dibs skill install` puts a Claude Code skill in
+  `~/.claude/skills/dibs/` that teaches an agent to claim a lab machine
+  before using it, to claim the whole machine for anything through the
+  BMC, and to release when done. `dibs skill print` shows it.
+
 ## [0.1.1] - 2026-10-27
 
 ### Fixed

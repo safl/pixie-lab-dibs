@@ -34,6 +34,10 @@ repos:
         # fail CI there.
         additional_dependencies:
           - mdformat-gfm==1.0.0
+          # Without this, mdformat rewrites the agent skill's YAML frontmatter
+          # into a horizontal rule and a heading, and Claude Code stops
+          # finding the skill.
+          - mdformat-frontmatter==2.1.2
 
   - repo: https://github.com/fsfe/reuse-tool
     rev: v6.2.0

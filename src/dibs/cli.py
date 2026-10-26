@@ -548,6 +548,25 @@ def cmd_admin_revoke(args: argparse.Namespace) -> None:
     print(f"Revoked {count} token(s) of '{args.name}'; they must log in again.")
 
 
+# ---- agent skill -----------------------------------------------------------
+
+SKILL = Path(__file__).parent / "skill" / "SKILL.md"
+
+
+def cmd_skill(args: argparse.Namespace) -> None:
+    """Install the Claude Code skill that teaches an agent to claim
+    machines before using them, or print it for another agent's setup."""
+    text = SKILL.read_text()
+    if args.action == "print":
+        sys.stdout.write(text)
+        return
+    target = Path(args.dir).expanduser() if args.dir else Path.home() / ".claude" / "skills"
+    path = target / "dibs" / "SKILL.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    print(f"Installed {path}. Claude Code picks it up in new sessions.")
+
+
 # ---- shell completion ------------------------------------------------------
 
 # Commands whose positional arguments are thing names, which the
@@ -729,6 +748,11 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--data", help="the server's data directory (default: /var/lib/dibs)")
         user_mode(p)
         p.set_defaults(func=func)
+
+    p = sub.add_parser("skill", help="install the agent skill that says how to use dibs")
+    p.add_argument("action", choices=["install", "print"])
+    p.add_argument("--dir", help="skills directory (default: ~/.claude/skills)")
+    p.set_defaults(func=cmd_skill)
 
     p = sub.add_parser("completion", help="print a shell completion script")
     p.add_argument("shell", choices=["bash"])

@@ -122,10 +122,38 @@ those rather than parse the text.
 The exit status is 0 when done, 1 when refused because someone else
 holds a thing, and 2 for anything else.
 
+### Parts
+
+A thing can have parts that people use independently, named
+`<thing>.<part>` and listed in the config like any other thing:
+
+```toml
+[[thing]]
+name = "epyc-02.gpu1"
+```
+
+Claiming `epyc-02` takes the whole machine, parts included, so it is
+refused while someone else holds a part. Claiming `epyc-02.gpu1` leaves
+the other parts to others, and is refused while someone else holds the
+whole machine. A part listed without its thing still makes the thing
+claimable.
+
+Only make something a part if using it cannot disturb the rest of the
+machine. Anything that can, such as the BMC, power, the console or
+reflashing, needs a claim on the whole machine, so it is an attribute of
+the thing (`bmc = "10.20.30.82"`) rather than a part.
+
 ### AI-agents
 
-Point your agent at this section. An agent claims as its human, and
-names itself the way an `Assisted-by:` trailer does:
+For Claude Code, install the skill that teaches an agent all of this,
+and it applies whenever the agent is about to use a lab machine:
+
+```
+dibs skill install
+```
+
+`dibs skill print` shows it, to adapt for another agent. An agent claims
+as its human, and names itself the way an `Assisted-by:` trailer does:
 
 ```
 export DIBS_ASSISTED_BY="Claude Code:claude-opus-5-5"
@@ -135,11 +163,13 @@ The claim then reads `'alice' assisted by 'Claude Code:claude-opus-5-5' has clai
 
 If you are an agent reading this: before you run anything on a lab
 machine, run `dibs list` and claim the machine with
-`dibs claim <machine> --for <purpose>`. Never use a machine someone else
-has claimed, and never pass `--force`; ask your human instead. Release
-what you claimed with `dibs release --mine` when the work is done, and
-also when it fails or is abandoned. That releases only what you claimed,
-not your human's own claims.
+`dibs claim <machine> --for <purpose>`. Power-cycling, the console,
+reflashing or anything else through the BMC needs the whole machine,
+never just a part. Never use a machine someone else has claimed, and
+never pass `--force`; ask your human instead. Release what you claimed
+with `dibs release --mine` when the work is done, and also when it fails
+or is abandoned. That releases only what you claimed, not your human's
+own claims.
 
 ### Automation-runners
 

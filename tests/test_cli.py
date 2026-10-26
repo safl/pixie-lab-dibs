@@ -259,3 +259,29 @@ def test_bash_completion(tmp_path: Path, capsys) -> None:
     assert _complete(script, "dibs claim --e", tmp_path) == ["--expires"]
     assert _complete(script, "dibs claim w", tmp_path) == ["warp"]
     assert "--names" not in _complete(script, "dibs list --", tmp_path)
+
+
+def test_skill_install_and_print(tmp_path: Path, capsys) -> None:
+    assert cli.main(["skill", "install", "--dir", str(tmp_path)]) == 0
+    installed = (tmp_path / "dibs" / "SKILL.md").read_text()
+    assert installed.startswith("---\nname: dibs\n")
+    assert "dibs release --mine" in installed and "--force" in installed
+    capsys.readouterr()
+    assert cli.main(["skill", "print"]) == 0
+    assert capsys.readouterr().out == installed
+
+
+def test_skill_ships_in_the_wheel(tmp_path: Path) -> None:
+    """The skill is data, not code, so check the built wheel carries it."""
+    import zipfile
+
+    if shutil.which("uv") is None:
+        pytest.skip("needs uv")
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(tmp_path)],
+        cwd=Path(__file__).parent.parent,
+        check=True,
+        capture_output=True,
+    )
+    wheel = next(tmp_path.glob("*.whl"))
+    assert "dibs/skill/SKILL.md" in zipfile.ZipFile(wheel).namelist()
