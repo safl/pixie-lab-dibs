@@ -10,8 +10,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-27
+
 ### Fixed
 
+- `dibs server install` over a running service now restarts it, so
+  installing again after an upgrade runs the new version. It used to
+  write the new unit and leave the old process running.
 - The system service refused every key at `dibs register` on hosts that
   resolve users without nss-systemd, plain Debian among them: under
   `DynamicUser=`, `ssh-keygen` could not look its own user up. `dibs server install` now creates a `dibs` system user and runs the service
