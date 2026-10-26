@@ -7,7 +7,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "calldibs"
+name = "pixie-lab-dibs"
 dynamic = ["version"]  # single source of truth: src/dibs/__init__.py:__version__
 description = "Call dibs on shared lab machines: see who is using what, claim it, release it"
 readme = "README.md"

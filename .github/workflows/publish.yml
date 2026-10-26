@@ -4,7 +4,7 @@
 
 name: publish
 
-# A version tag publishes that version to PyPI, as calldibs. The upload uses
+# A version tag publishes that version to PyPI, as pixie-lab-dibs. The upload uses
 # PyPI's trusted publishing, so no token is stored here: PyPI accepts it
 # because it comes from this workflow in this repository.
 on:

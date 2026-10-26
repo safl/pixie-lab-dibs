@@ -8,8 +8,8 @@ SPDX-License-Identifier: BSD-3-Clause
 
 [![test](https://github.com/safl/dibs/actions/workflows/test.yml/badge.svg)](https://github.com/safl/dibs/actions/workflows/test.yml)
 [![format](https://github.com/safl/dibs/actions/workflows/format.yml/badge.svg)](https://github.com/safl/dibs/actions/workflows/format.yml)
-[![PyPI](https://img.shields.io/pypi/v/calldibs)](https://pypi.org/project/calldibs/)
-[![Python](https://img.shields.io/pypi/pyversions/calldibs)](https://pypi.org/project/calldibs/)
+[![PyPI](https://img.shields.io/pypi/v/pixie-lab-dibs)](https://pypi.org/project/pixie-lab-dibs/)
+[![Python](https://img.shields.io/pypi/pyversions/pixie-lab-dibs)](https://pypi.org/project/pixie-lab-dibs/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 [![REUSE status](https://api.reuse.software/badge/github.com/safl/dibs)](https://api.reuse.software/info/github.com/safl/dibs)
 
@@ -32,7 +32,7 @@ on their own, with their hardware inventory.
 ## Install
 
 ```
-uv tool install calldibs
+uv tool install pixie-lab-dibs
 ```
 
 That gives you the `dibs` command, for both the server and the client.
@@ -65,7 +65,7 @@ user that owns only `/var/lib/dibs`. Without root, `dibs server install --user` 
 
 The system service can only run a `dibs` installed outside your home
 directory, for example with
-`sudo UV_TOOL_DIR=/opt/uv UV_TOOL_BIN_DIR=/usr/local/bin uv tool install calldibs`.
+`sudo UV_TOOL_DIR=/opt/uv UV_TOOL_BIN_DIR=/usr/local/bin uv tool install pixie-lab-dibs`.
 
 ## Sign in
 
@@ -220,7 +220,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ```
 
 The tag runs the publish workflow, which checks the tag matches the
-version, runs the checks, and uploads `calldibs` to PyPI through trusted
+version, runs the checks, and uploads `pixie-lab-dibs` to PyPI through trusted
 publishing.
 
 ## License
