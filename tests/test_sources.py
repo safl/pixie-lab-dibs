@@ -72,3 +72,11 @@ def test_a_machine_pixie_forgets_disappears(tmp_path: Path, pixie: FakePixie) ->
     pixie.machines = [m for m in pixie.machines if m.get("name") != "warp"]
     sync(store, load_config(tmp_path / "dibs.toml"), [pixie.source()])
     assert "warp" not in {t.name for t in store.list_things()}
+
+
+def test_a_part_alone_makes_its_thing_claimable(tmp_path: Path) -> None:
+    path = tmp_path / "dibs.toml"
+    path.write_text('[[thing]]\nname = "box.bmc"\nhost = "10.0.0.2"\n')
+    store = Store(tmp_path / "dibs.db")
+    sync(store, load_config(path), [])
+    assert [t.name for t in store.list_things()] == ["box", "box.bmc"]

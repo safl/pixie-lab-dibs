@@ -18,7 +18,9 @@ hand and names the pixie servers to poll::
     mac = "aa:bb:cc:dd:ee:ff"   # any other key is kept as an attribute
 
 A ``[[thing]]`` with the name of a pixie machine adds its attributes to
-that machine rather than making a second thing.
+that machine rather than making a second thing. A name with a dot is a
+part of the thing before the dot, ``epyc-02.bmc`` of ``epyc-02``, claimable
+on its own or along with the whole thing.
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from typing import Any
 
 import httpx
 
-from dibs._store import Store, Thing, ts, validate_thing_name
+from dibs._store import Store, Thing, owner, ts, validate_thing_name
 
 log = logging.getLogger("dibs")
 
@@ -150,4 +152,10 @@ def sync(
             base.kind = t.kind
         else:
             merged[t.name] = Thing(t.name, t.kind, t.source, dict(t.attrs), stamp)
+    # A part listed without its thing still makes the thing claimable as a
+    # whole, so "epyc-02.bmc" alone gives you "epyc-02" too.
+    for t in list(merged.values()):
+        whole = owner(t.name)
+        if whole not in merged:
+            merged[whole] = Thing(whole, t.kind, t.source, {}, stamp)
     store.replace_things(sorted(merged.values(), key=lambda t: t.name))

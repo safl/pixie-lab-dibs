@@ -153,3 +153,26 @@ def test_hook_sends_macs_and_hostname_once(hook: Path, tmp_path: Path) -> None:
     assert r.stdout == ""
     sent = calls.read_text().splitlines()
     assert len(sent) == 1 and "mac=" in sent[0] and "host=" in sent[0]
+
+
+def test_parts_over_the_api(client: TestClient, tokens, tmp_path: Path) -> None:
+    """A part and its thing, through claim, list, the text route and the
+    login hook's lookup."""
+    config = client.app.state.config  # type: ignore[attr-defined]
+    from dibs._store import Thing
+
+    config.things.append(Thing("ryzen-01.bmc", "machine", "config", {"host": "10.0.0.61"}))
+    client.app.state.sync()  # type: ignore[attr-defined]
+    assert _claim(client, tokens, "ryzen-01.bmc", who="bob").status_code == 200
+    r = _claim(client, tokens, "ryzen-01")
+    assert r.status_code == 409
+    assert r.json()["detail"]["claimed"] == [
+        "'bob' has claimed 'ryzen-01.bmc' for 'xnvme' expires in: 'never'"
+    ]
+    things = {t["name"]: t for t in client.get("/things").json()["things"]}
+    assert things["ryzen-01"]["sentence"].startswith("'bob' has claimed 'ryzen-01.bmc'")
+    assert "claim" not in things["ryzen-01"]
+    assert things["ryzen-01"]["covered_by"][0]["thing"] == "ryzen-01.bmc"
+    # The login hook on ryzen-01 (by MAC) sees the part's claim.
+    hook = client.get("/claim", params={"mac": "aa:bb:cc:dd:ee:60"}).text
+    assert hook.startswith("'bob' has claimed 'ryzen-01.bmc'")

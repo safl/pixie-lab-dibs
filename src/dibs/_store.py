@@ -10,6 +10,13 @@ things table is rebuilt from the sources on every sync (see
 a table of their own, keyed by thing name, so a claim outlives a sync in
 which its source was unreachable or briefly forgot the thing.
 
+A thing may have **parts**, named ``<thing>.<part>``, such as
+``epyc-02.ssh`` and ``epyc-02.bmc``. Claiming the thing covers all of its
+parts; claiming a part leaves the others free for someone else. So a
+claim on a thing conflicts with another user's claim on any of its parts,
+and a claim on a part conflicts with another user's claim on that part
+or on the thing.
+
 Every surface (``dibs``, the web page, the login hook on a machine)
 prints a claim as the same sentence, from :func:`sentence`.
 """
@@ -31,8 +38,11 @@ from typing import Any
 _WRITE_LOCK = threading.Lock()
 
 # What people type and put in configs next to the hostname, so a host
-# label: lowercase a-z, 0-9 and -, at most 63 chars.
-THING_NAME_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+# label (lowercase a-z, 0-9 and -, at most 63 chars), optionally followed
+# by one ".<part>" label. A hostname label has no dot, so the dot is free
+# to mean "part of".
+_LABEL = r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?"
+THING_NAME_RE = re.compile(rf"^{_LABEL}(\.{_LABEL})?$")
 
 PURPOSE_MAX = 128
 ASSISTED_BY_MAX = 64
@@ -68,10 +78,21 @@ def validate_thing_name(raw: str) -> str:
     name = (raw or "").strip().lower()
     if not THING_NAME_RE.match(name):
         raise ValueError(
-            f"name {name!r} must be a hostname label: a-z / 0-9 / -, "
-            "1-63 chars, no leading or trailing -"
+            f"name {name!r} must be a hostname label (a-z / 0-9 / -, 1-63 chars, "
+            "no leading or trailing -), optionally with one .part, e.g. epyc-02.bmc"
         )
     return name
+
+
+def owner(name: str) -> str:
+    """The thing a part belongs to; a thing is its own owner."""
+    return name.split(".", 1)[0]
+
+
+def overlaps(a: str, b: str) -> bool:
+    """Whether claims on ``a`` and ``b`` cover any of the same thing: the
+    same name, or a thing and one of its parts."""
+    return a == b or a == owner(b) or b == owner(a)
 
 
 def _one_line(field_name: str, raw: str, limit: int) -> str:
@@ -160,15 +181,40 @@ def remaining(expires_at: str, now: datetime) -> str:
 
 
 def sentence(name: str, claim: Claim | None, now: datetime) -> str:
+    """One claim as it reads everywhere. The claim names the thing it is
+    on, which for a part covered by its thing's claim is not ``name``."""
     if claim is None or not claim.is_live(now):
         return f"'{name}' is free"
     who = f"'{claim.holder}'"
     if claim.assisted_by:
         who += f" assisted by '{claim.assisted_by}'"
     return (
-        f"{who} has claimed '{name}' for '{claim.purpose}' "
+        f"{who} has claimed '{claim.thing}' for '{claim.purpose}' "
         f"expires in: '{remaining(claim.expires_at, now)}'"
     )
+
+
+def covering(name: str, claims: dict[str, Claim], now: datetime) -> builtins.list[Claim]:
+    """The live claims that say who is on ``name``: its own claim, else
+    its thing's claim for a part, else its parts' claims for a thing."""
+    own = claims.get(name)
+    if own is not None and own.is_live(now):
+        return [own]
+    if "." in name:
+        whole = claims.get(owner(name))
+        return [whole] if whole is not None and whole.is_live(now) else []
+    return sorted(
+        (c for c in claims.values() if owner(c.thing) == name and c.is_live(now)),
+        key=lambda c: c.thing,
+    )
+
+
+def describe(name: str, claims: dict[str, Claim], now: datetime) -> str:
+    """The sentence for ``name``, counting claims on its thing or parts."""
+    found = covering(name, claims, now)
+    if not found:
+        return f"'{name}' is free"
+    return "; ".join(sentence(c.thing, c, now) for c in found)
 
 
 class Store:
@@ -248,8 +294,10 @@ class Store:
         or without an agent, updates the purpose, expiry and
         ``assisted_by`` and keeps ``claimed_at``. ``expires_in`` is
         seconds from now; ``None`` never expires. Returns ``(before,
-        after)`` pairs so the caller can log what a ``force`` took over.
-        Callers check that the things exist."""
+        after)`` pairs so the caller can log what a ``force`` took over;
+        a forced claim on a thing also takes over other users' claims on
+        its parts, and those appear as pairs too. Callers check that the
+        things exist."""
         purpose = validate_purpose(purpose)
         assisted_by = validate_assisted_by(assisted_by)
         if expires_in is not None and expires_in <= 0:
@@ -260,14 +308,16 @@ class Store:
         with _WRITE_LOCK, self._conn() as conn:
             before = {n: self._claim_row(conn, n) for n in unique}
             live = {n: c for n, c in before.items() if c is not None and c.is_live(at)}
-            blockers = [c for c in live.values() if c.holder != holder]
+            others = [c for c in self._live_rows(conn, at) if c.holder != holder]
+            blockers = [c for c in others if any(overlaps(c.thing, n) for n in unique)]
             if blockers and not force:
                 raise ClaimConflict(blockers, at)
             out: builtins.list[tuple[Claim | None, Claim]] = []
+            afters: dict[str, Claim] = {}
             for n in unique:
                 prior = live.get(n)
                 since = prior.claimed_at if prior and prior.holder == holder else ts(at)
-                after = Claim(n, holder, purpose, since, assisted_by, expires_at)
+                after = afters[n] = Claim(n, holder, purpose, since, assisted_by, expires_at)
                 conn.execute(
                     "INSERT OR REPLACE INTO claims "
                     "(thing, holder, assisted_by, purpose, claimed_at, expires_at) "
@@ -275,6 +325,11 @@ class Store:
                     (n, holder, assisted_by, purpose, since, expires_at),
                 )
                 out.append((prior, after))
+            for b in blockers:
+                if b.thing not in afters:
+                    conn.execute("DELETE FROM claims WHERE thing = ?", (b.thing,))
+                    covering_name = next(n for n in unique if overlaps(b.thing, n))
+                    out.append((b, afters[covering_name]))
         return out
 
     def release(
@@ -311,6 +366,11 @@ class Store:
                 "SELECT * FROM claims WHERE holder = ? AND assisted_by = ? ORDER BY thing",
                 (holder, assisted_by.strip()),
             ).fetchall()
+        return [c for c in (Claim(**dict(r)) for r in rows) if c.is_live(at)]
+
+    @staticmethod
+    def _live_rows(conn: sqlite3.Connection, at: datetime) -> builtins.list[Claim]:
+        rows = conn.execute("SELECT * FROM claims").fetchall()
         return [c for c in (Claim(**dict(r)) for r in rows) if c.is_live(at)]
 
     @staticmethod

@@ -113,3 +113,75 @@ def test_claimed_by_is_scoped_to_assisted_by(store: Store) -> None:
 def test_claim_rejects_bad_text(store: Store, purpose: str, assisted_by: str) -> None:
     with pytest.raises(ValueError):
         store.claim(["a"], holder="alice", purpose=purpose, assisted_by=assisted_by, now=T0)
+
+
+# ---- parts ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["epyc-02", "epyc-02.bmc", "a.b"])
+def test_part_names_are_accepted(name: str) -> None:
+    from dibs._store import validate_thing_name
+
+    assert validate_thing_name(name) == name
+
+
+@pytest.mark.parametrize("name", ["epyc-02.", ".bmc", "a.b.c", "a..b", "a.-b"])
+def test_bad_part_names_are_refused(name: str) -> None:
+    from dibs._store import validate_thing_name
+
+    with pytest.raises(ValueError):
+        validate_thing_name(name)
+
+
+def test_two_users_may_hold_different_parts(store: Store) -> None:
+    store.claim(["box.ssh"], holder="alice", purpose="x", now=T0)
+    store.claim(["box.bmc"], holder="bob", purpose="y", now=T0)
+    assert {n: c.holder for n, c in store.list_claims().items()} == {
+        "box.ssh": "alice",
+        "box.bmc": "bob",
+    }
+
+
+def test_the_whole_thing_conflicts_with_another_users_part(store: Store) -> None:
+    store.claim(["box.bmc"], holder="bob", purpose="y", now=T0)
+    with pytest.raises(ClaimConflict) as exc:
+        store.claim(["box"], holder="alice", purpose="x", now=T0)
+    assert exc.value.sentences == ["'bob' has claimed 'box.bmc' for 'y' expires in: 'never'"]
+
+
+def test_a_part_conflicts_with_another_users_whole_thing(store: Store) -> None:
+    store.claim(["box"], holder="bob", purpose="y", now=T0)
+    with pytest.raises(ClaimConflict):
+        store.claim(["box.ssh"], holder="alice", purpose="x", now=T0)
+    # The same user holding the whole thing may also claim a part of it.
+    store.claim(["box.ssh"], holder="bob", purpose="z", now=T0)
+
+
+def test_parts_of_other_things_do_not_conflict(store: Store) -> None:
+    store.claim(["box.bmc"], holder="bob", purpose="y", now=T0)
+    store.claim(["boxer", "boxer.bmc"], holder="alice", purpose="x", now=T0)
+
+
+def test_forcing_the_whole_thing_takes_over_its_parts(store: Store) -> None:
+    store.claim(["box.bmc"], holder="bob", purpose="y", now=T0)
+    pairs = store.claim(["box"], holder="alice", purpose="x", force=True, now=T0)
+    taken = [(b.thing, b.holder, a.thing) for b, a in pairs if b is not None]
+    assert taken == [("box.bmc", "bob", "box")]
+    assert set(store.list_claims()) == {"box"}
+
+
+def test_describe_reads_through_parts_and_wholes(store: Store) -> None:
+    from dibs._store import describe
+
+    store.claim(["box.bmc"], holder="bob", purpose="power", now=T0)
+    claims = store.list_claims()
+    assert (
+        describe("box", claims, T0) == "'bob' has claimed 'box.bmc' for 'power' expires in: 'never'"
+    )
+    assert describe("box.ssh", claims, T0) == "'box.ssh' is free"
+    store.release(["box.bmc"], holder="bob", now=T0)
+    store.claim(["box"], holder="alice", purpose="all", now=T0)
+    claims = store.list_claims()
+    assert (
+        describe("box.ssh", claims, T0) == "'alice' has claimed 'box' for 'all' expires in: 'never'"
+    )

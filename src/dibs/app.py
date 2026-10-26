@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field
 
 import dibs
 from dibs._sources import Config, PixieSource, load_config, sync
-from dibs._store import Claim, ClaimConflict, Store, Thing, sentence
+from dibs._store import Claim, ClaimConflict, Store, Thing, covering, describe, sentence
 from dibs._users import DuplicateUser, LoginFailed, NotApproved, UsersStore
 
 log = logging.getLogger("dibs")
@@ -80,19 +80,28 @@ def current_user(request: Request) -> str:
     return str(user)
 
 
-def _view(name: str, thing: Thing | None, claim: Claim | None, now: datetime) -> dict[str, Any]:
-    """One thing as the API shows it. A claim on a thing no source lists
-    any more still shows, with ``source`` ``gone``, so it can be released."""
+def _view(
+    name: str, thing: Thing | None, claims: dict[str, Claim], now: datetime
+) -> dict[str, Any]:
+    """One thing as the API shows it. ``claim`` is a claim on this very
+    name; ``covered_by`` lists every live claim that says who is on it,
+    which for a part includes its thing's claim and for a thing its
+    parts'. A claim on a thing no source lists any more still shows,
+    with ``source`` ``gone``, so it can be released."""
     out: dict[str, Any] = {
         "name": name,
         "kind": thing.kind if thing else "unknown",
         "source": thing.source if thing else "gone",
-        "sentence": sentence(name, claim, now),
+        "sentence": describe(name, claims, now),
     }
     if thing and thing.attrs:
         out["attrs"] = thing.attrs
-    if claim is not None and claim.is_live(now):
-        out["claim"] = claim.to_dict()
+    own = claims.get(name)
+    if own is not None and own.is_live(now):
+        out["claim"] = own.to_dict()
+    found = covering(name, claims, now)
+    if found:
+        out["covered_by"] = [{"thing": c.thing, **c.to_dict()} for c in found]
     return out
 
 
@@ -153,16 +162,17 @@ def create_app(
         things = {t.name: t for t in store.list_things()}
         claims = store.list_claims()
         names = sorted(set(things) | {n for n, c in claims.items() if c.is_live(now)})
-        return {"things": [_view(n, things.get(n), claims.get(n), now) for n in names]}
+        return {"things": [_view(n, things.get(n), claims, now) for n in names]}
 
     @app.get("/things/{name}")
     def get_thing(name: str) -> dict[str, Any]:
         now = datetime.now(UTC)
+        name = name.strip().lower()
         thing = store.get_thing(name)
-        claim = store.get_claim(name.strip().lower())
-        if thing is None and claim is None:
+        claims = store.list_claims()
+        if thing is None and name not in claims:
             raise HTTPException(status_code=404, detail=f"no such thing: {name}")
-        out = _view(name.strip().lower(), thing, claim, now)
+        out = _view(name, thing, claims, now)
         if thing is not None and thing.source in app.state.pixies:
             info = app.state.pixies[thing.source].info(thing.name)
             if info is not None:
@@ -174,7 +184,7 @@ def create_app(
         name = name.strip().lower()
         if store.get_thing(name) is None:
             raise HTTPException(status_code=404, detail=f"no such thing: {name}")
-        return PlainTextResponse(sentence(name, store.get_claim(name), datetime.now(UTC)) + "\n")
+        return PlainTextResponse(describe(name, store.list_claims(), datetime.now(UTC)) + "\n")
 
     @app.get("/claim", response_class=PlainTextResponse)
     def claim_for_host(mac: str = "", host: str = "") -> PlainTextResponse:
@@ -183,7 +193,7 @@ def create_app(
         thing = store.thing_by_mac(mac.split(",")) or (store.get_thing(host) if host else None)
         if thing is None:
             raise HTTPException(status_code=404, detail="not a thing dibs knows")
-        text = sentence(thing.name, store.get_claim(thing.name), datetime.now(UTC))
+        text = describe(thing.name, store.list_claims(), datetime.now(UTC))
         return PlainTextResponse(text + "\n")
 
     @app.post("/claims")
@@ -209,7 +219,9 @@ def create_app(
                 log.warning("%s took %s from %s", user, after.thing, before.holder)
             log.info("%s", sentence(after.thing, after, now))
         things = {t.name: t for t in store.list_things()}
-        return {"things": [_view(a.thing, things.get(a.thing), a, now) for _, a in pairs]}
+        claims = store.list_claims()
+        claimed = list(dict.fromkeys(a.thing for _, a in pairs))
+        return {"things": [_view(n, things.get(n), claims, now) for n in claimed]}
 
     @app.post("/claims/release")
     def release(body: ReleaseBody, user: str = Depends(current_user)) -> dict[str, Any]:
@@ -225,9 +237,10 @@ def create_app(
         except ClaimConflict as exc:
             raise _conflict(exc) from exc
         things = {t.name: t for t in store.list_things()}
+        claims = store.list_claims()
         for c in released:
             log.info("%s released %s (held by %s)", user, c.thing, c.holder)
-        return {"things": [_view(c.thing, things.get(c.thing), None, now) for c in released]}
+        return {"things": [_view(c.thing, things.get(c.thing), claims, now) for c in released]}
 
     @app.post("/auth/register", status_code=202)
     def register(body: RegisterBody) -> dict[str, str]:
