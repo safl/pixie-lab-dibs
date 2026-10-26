@@ -155,7 +155,8 @@ def test_server_install_writes_enables_and_controls(
     assert "--port 9000 --user" in unit.read_text()
     assert calls == [
         ["systemctl", "--user", "daemon-reload"],
-        ["systemctl", "--user", "enable", "--now", "dibs.service"],
+        ["systemctl", "--user", "enable", "dibs.service"],
+        ["systemctl", "--user", "restart", "dibs.service"],
     ]
     calls.clear()
     cli.main(["server", "stop", "--user"])

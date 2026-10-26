@@ -483,7 +483,10 @@ def cmd_server_install(args: argparse.Namespace) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
     _systemctl(args.user, "daemon-reload")
-    _systemctl(args.user, "enable", "--now", UNIT_NAME)
+    _systemctl(args.user, "enable", UNIT_NAME)
+    # Restart rather than start, so installing over a running service, as
+    # an upgrade does, replaces the process with the new code and unit.
+    _systemctl(args.user, "restart", UNIT_NAME)
     print(f"Installed {path} and started it; dibs listens on port {args.port}.")
     if args.user:
         print("To keep it running while you are logged out: loginctl enable-linger")

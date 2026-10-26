@@ -31,4 +31,12 @@ dibs login
 dibs claim box --for smoke
 dibs list | grep -qx "'ci' has claimed 'box' for 'smoke' expires in: 'never'"
 dibs release --mine
+
+# Installing again, as an upgrade does, must replace the running process.
+before=$(systemctl show -p MainPID --value dibs.service)
+sudo /usr/local/bin/dibs server install --port 8090
+after=$(systemctl show -p MainPID --value dibs.service)
+[ "$before" != "$after" ] || { echo "install did not restart the running service" >&2; exit 1; }
+for _ in $(seq 1 30); do curl -fsS "$DIBS_URL/healthz" >/dev/null 2>&1 && break; sleep 1; done
+dibs list | grep -qx "'box' is free"
 echo "service smoke test passed"
