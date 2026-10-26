@@ -10,6 +10,14 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The system service refused every key at `dibs register` on hosts that
+  resolve users without nss-systemd, plain Debian among them: under
+  `DynamicUser=`, `ssh-keygen` could not look its own user up. `dibs server install` now creates a `dibs` system user and runs the service
+  as it. Run `sudo dibs server install` again to update an installed
+  service.
+
 ## [0.1.0] - 2026-10-27
 
 ### Added
