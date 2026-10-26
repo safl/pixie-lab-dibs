@@ -18,7 +18,8 @@ logging in to a machine someone else holds, so it is on you not to.
 ## Before you touch a machine
 
 1. Look: `dibs list`. Use `dibs list --json` to read it, not the text.
-2. Claim it, naming yourself as an agent and saying what for:
+
+1. Claim it, naming yourself as an agent and saying what for:
 
    ```
    DIBS_ASSISTED_BY="Claude Code:<your model id>" dibs claim <machine> --for "<what you are doing>"
@@ -28,7 +29,7 @@ logging in to a machine someone else holds, so it is on you not to.
    agrees on who you are. It uses your human's login; you need no login
    of your own.
 
-3. Exit status 1 means someone else holds it. Do not use the machine and
+1. Exit status 1 means someone else holds it. Do not use the machine and
    do not pass `--force`. Tell your human who holds it (the error says)
    and ask what to do.
 
