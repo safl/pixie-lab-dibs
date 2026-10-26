@@ -10,6 +10,8 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-27
+
 ### Added
 
 - Parts: a thing can have parts named `<thing>.<part>`, claimable on
