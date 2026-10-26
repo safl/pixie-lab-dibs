@@ -42,6 +42,7 @@ class ClaimBody(BaseModel):
     things: list[str] = Field(..., min_length=1)
     purpose: str
     assisted_by: str = Field(default="", description="Agent:model, as in an Assisted-by trailer")
+    session: str = Field(default="", description="Which agent session of the user is claiming")
     expires_in: int | None = Field(default=None, description="Seconds; null never expires")
     force: bool = False
 
@@ -49,7 +50,10 @@ class ClaimBody(BaseModel):
 class ReleaseBody(BaseModel):
     things: list[str] = Field(default_factory=list)
     assisted_by: str = ""
-    mine: bool = Field(default=False, description="Every live claim you hold through assisted_by")
+    session: str = ""
+    mine: bool = Field(
+        default=False, description="Every live claim of this user, assisted_by and session"
+    )
     force: bool = False
 
 
@@ -77,7 +81,11 @@ def current_user(request: Request) -> str:
     """Dependency: the user a bearer token belongs to, else 401."""
     user = request.app.state.users.user_for_token(_bearer(request))
     if user is None:
-        raise HTTPException(status_code=401, detail="not logged in; run: dibs login <user>")
+        raise HTTPException(
+            status_code=401,
+            detail="not logged in; a person sets up with dibs register and dibs login "
+            "(agents use their person's login)",
+        )
     return str(user)
 
 
@@ -207,6 +215,7 @@ def create_app(
                 holder=user,
                 purpose=body.purpose,
                 assisted_by=body.assisted_by,
+                session=body.session,
                 expires_in=body.expires_in,
                 force=body.force,
                 now=now,
@@ -230,11 +239,20 @@ def create_app(
         if body.mine == bool(body.things):
             raise HTTPException(status_code=422, detail="name things to release, or set mine")
         if body.mine:
-            names = [c.thing for c in store.claimed_by(user, body.assisted_by, now=now)]
+            names = [
+                c.thing for c in store.claimed_by(user, body.assisted_by, body.session, now=now)
+            ]
         else:
             names = [n.strip().lower() for n in body.things]
         try:
-            released = store.release(names, holder=user, force=body.force, now=now)
+            released = store.release(
+                names,
+                holder=user,
+                assisted_by=body.assisted_by,
+                session=body.session,
+                force=body.force,
+                now=now,
+            )
         except ClaimConflict as exc:
             raise _conflict(exc) from exc
         things = {t.name: t for t in store.list_things()}
@@ -352,24 +370,47 @@ AGENTS_PAGE = """\
 # dibs on this lab
 
 The machines on this lab are shared by people, ai-agents and
-automation-runners, and claimed with dibs at {base}. Read this before you
-touch any of them.
+automation-runners. Each is claimed with dibs, at {base}, before anyone
+touches it. Read the part for you.
 
-## Set up, once per machine you work from
+## If you are a person: set up once per workstation
 
 ```
 uv tool install pixie-lab-dibs
-export DIBS_URL={base}
-dibs register <your name>      # then ask the lab's admin to approve you
+echo 'export DIBS_URL={base}' >> ~/.bashrc
+dibs register <name>     # then ask the lab's admin to approve you
 dibs login
+dibs skill install       # Claude Code agents then follow the rules below by themselves
 ```
 
-An agent uses its human's login and needs none of its own. For Claude
-Code, `dibs skill install` makes the rules below load by themselves.
+Every agent you run on this workstation uses this login. Agents never
+register or log in themselves.
+
+## If you are an agent: before anything else
+
+1. Check that your human has set up this workstation:
+
+   ```
+   DIBS_URL={base} dibs whoami
+   ```
+
+   It prints your human's name. If it fails, stop, and give your human the
+   setup above. Do not register or log in yourself.
+
+1. Get a session tag for this conversation, once, with `dibs session`, and
+   pass it, with who you are, on every dibs command:
+
+   ```
+   DIBS_URL={base} DIBS_ASSISTED_BY="Claude Code:<model>" DIBS_SESSION=<tag> dibs ...
+   ```
+
+   Your claims then say which agent made them, and no other agent of the
+   same person can take or release them without `--force`.
 
 ## Right now
 
 {now}
+
 """
 
 PAGE = """<!doctype html>

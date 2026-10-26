@@ -67,11 +67,15 @@ def test_conflict_unknown_and_invalid(client: TestClient, tokens) -> None:
     assert _claim(client, tokens, "ryzen-01", purpose="").status_code == 422
 
 
-def test_release_mine_is_scoped_to_assisted_by(client: TestClient, tokens) -> None:
+def test_release_mine_is_scoped_to_the_session(client: TestClient, tokens) -> None:
     _claim(client, tokens, "epyc-02")
-    r = _claim(client, tokens, "warp", assisted_by=AGENT)
-    assert r.json()["things"][0]["sentence"].startswith(f"'alice' assisted by '{AGENT}'")
-    released = _release(client, tokens, mine=True, assisted_by=AGENT).json()["things"]
+    r = _claim(client, tokens, "warp", assisted_by=AGENT, session="s1")
+    assert r.json()["things"][0]["sentence"].startswith(
+        f"'alice' assisted by '{AGENT}' (session s1)"
+    )
+    assert r.json()["things"][0]["claim"]["session"] == "s1"
+    _claim(client, tokens, "ryzen-01", assisted_by=AGENT, session="s2")
+    released = _release(client, tokens, mine=True, assisted_by=AGENT, session="s1").json()["things"]
     assert [t["name"] for t in released] == ["warp"]
     assert client.get("/things/epyc-02").json()["claim"]["holder"] == "alice"
     assert _release(client, tokens).status_code == 422
@@ -185,7 +189,10 @@ def test_agents_page_is_set_up_for_this_server(client: TestClient, tokens) -> No
     r = client.get("/agents")
     assert r.headers["content-type"].startswith("text/plain")
     page = r.text
-    assert "export DIBS_URL=http://testserver\n" in page
+    assert "echo 'export DIBS_URL=http://testserver' >> ~/.bashrc" in page
+    assert "DIBS_URL=http://testserver dibs whoami" in page
+    assert "If you are a person" in page and "If you are an agent" in page
+    assert "Agents never\nregister" in page
     assert "- 'alice' has claimed 'warp' for 'xnvme' expires in: 'never'" in page
     assert page.endswith(skill_body())
     # The skill's Claude Code frontmatter and licence comment are not for this reader.

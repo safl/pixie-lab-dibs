@@ -10,6 +10,25 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Agent sessions: `DIBS_SESSION` tags the claims of one agent session,
+  with a random tag from `dibs session`,
+  and claims read `... assisted by 'Claude Code:<model>' (session <tag>) ...`. `release --mine` releases only that session's claims.
+- `dibs whoami` shows who claims are made as, and fails when nobody has
+  logged in, so an agent can tell setup is missing.
+- `/agents` and the skill now say who does what: a person sets up once
+  per workstation, and every agent there uses that login, never
+  registering itself.
+
+### Changed
+
+- A claim belongs to its actor, the user with their agent and session,
+  rather than to the user alone. Two agents of one person, or a person
+  and their agent, now conflict when claiming the same thing, instead of
+  the second silently taking over. A person claiming by hand can still
+  release any of their agents' claims without `--force`.
+
 ## [0.2.1] - 2026-10-27
 
 ### Added

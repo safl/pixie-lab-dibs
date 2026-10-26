@@ -14,7 +14,9 @@ and ``dibs list``, ``info``, ``claim`` and ``release`` use it. The client
 finds the server with ``--url`` or ``DIBS_URL``, keeps its token per URL
 in ``$XDG_CONFIG_HOME/dibs/client.json`` (``DIBS_TOKEN`` overrides it, for
 runners), and an agent sets ``DIBS_ASSISTED_BY`` (``Agent:model``, as in
-an ``Assisted-by:`` trailer) so its claims say so.
+an ``Assisted-by:`` trailer) and ``DIBS_SESSION`` (a tag for this agent
+session) so its claims say which agent made them and other agents of the
+same person leave them alone.
 
 Exit status: 0 done, 1 refused because a thing is claimed by someone
 else, 2 anything else (usage, unknown thing, server unreachable).
@@ -135,6 +137,10 @@ def token(url: str) -> str:
 
 def assisted_by() -> str:
     return os.environ.get("DIBS_ASSISTED_BY", "").strip()
+
+
+def session() -> str:
+    return os.environ.get("DIBS_SESSION", "").strip()
 
 
 def default_key() -> Path:
@@ -312,6 +318,7 @@ def cmd_claim(args: argparse.Namespace) -> None:
         "things": args.things,
         "purpose": args.purpose,
         "assisted_by": assisted_by(),
+        "session": session(),
         "expires_in": args.expires,
         "force": args.force,
     }
@@ -325,6 +332,7 @@ def cmd_release(args: argparse.Namespace) -> None:
     body = {
         "things": args.things,
         "assisted_by": assisted_by(),
+        "session": session(),
         "mine": args.mine,
         "force": args.force,
     }
@@ -361,6 +369,37 @@ def cmd_login(args: argparse.Namespace) -> None:
     answer = _request(url, "POST", "/auth/login", body)
     _save(url, user=answer["user"], key=str(key), token=answer["token"])
     print(f"Logged in as '{answer['user']}'.")
+
+
+def cmd_whoami(args: argparse.Namespace) -> None:
+    """Who this workstation's dibs claims as: the user from the login,
+    and the agent and session from the environment. Fails when nobody
+    has logged in, which is how an agent learns setup is missing."""
+    url = _url(args)
+    me: dict[str, str] = {"user": _request(url, "GET", "/auth/whoami")["user"]}
+    if assisted_by():
+        me["assisted_by"] = assisted_by()
+    if session():
+        me["session"] = session()
+    if args.format:
+        sys.stdout.write(dump(me, args.format))
+        return
+    line = f"'{me['user']}'"
+    if "assisted_by" in me:
+        line += f" assisted by '{me['assisted_by']}'"
+    if "session" in me:
+        line += f" (session {me['session']})"
+    print(line)
+
+
+def cmd_session(args: argparse.Namespace) -> None:
+    """A fresh session tag for an agent to pass as ``DIBS_SESSION`` for
+    the rest of its conversation. Random, so two agents of the same
+    person never pick the same one; nothing is stored, here or on the
+    server, until a claim carries it."""
+    import secrets
+
+    print(f"s-{secrets.token_hex(4)}")
 
 
 def cmd_logout(args: argparse.Namespace) -> None:
@@ -639,7 +678,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "The client finds the server via --url or DIBS_URL. Claiming needs a login: "
             "register, have the admin approve you, then login. Agents set "
-            "DIBS_ASSISTED_BY; runners may pass a token in DIBS_TOKEN. Exit status: 0 done, "
+            "DIBS_ASSISTED_BY and DIBS_SESSION; runners may pass a token in DIBS_TOKEN. "
+            "Exit status: 0 done, "
             "1 claimed by someone else, 2 other errors."
         ),
     )
@@ -695,6 +735,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("user", nargs="?", help="default: the user you registered or last logged in as")
     p.add_argument("-i", "--key", help="SSH public key file (default: the one you registered with)")
     p.set_defaults(func=cmd_login)
+
+    p = sub.add_parser("whoami", parents=[data], help="show who your claims are made as")
+    p.set_defaults(func=cmd_whoami)
+
+    p = sub.add_parser("session", help="print a fresh session tag for an agent")
+    p.set_defaults(func=cmd_session)
 
     p = sub.add_parser("logout", help="drop your token for this server")
     p.set_defaults(func=cmd_logout)

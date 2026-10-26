@@ -15,23 +15,45 @@ Lab machines are shared with people, other agents and CI. dibs says who
 is on which. A claim is a note, not a lock: nothing stops you from
 logging in to a machine someone else holds, so it is on you not to.
 
+## Once per conversation
+
+1. Check that your human has set up this workstation:
+
+   ```
+   dibs whoami
+   ```
+
+   It prints your human's name. If it fails, or `dibs` or `DIBS_URL` is
+   missing, stop and tell your human to read `$DIBS_URL/agents`, or the
+   dibs README. Never run `dibs register` or `dibs login` yourself: you
+   claim with your human's login.
+
+1. Get a session tag for this conversation, once, with `dibs session`.
+   It prints a random tag such as `s-3f2a9c41`. Do not make one up: two
+   agents could pick the same. Pass it, and who you are, on every dibs
+   command, inline, so every call agrees:
+
+   ```
+   DIBS_ASSISTED_BY="Claude Code:<your model id>" DIBS_SESSION=<tag> dibs ...
+   ```
+
+   Your claims then say which agent made them, and another agent of the
+   same person cannot take or release them without `--force`; nor can you
+   theirs.
+
 ## Before you touch a machine
 
-1. Look: `dibs list`. Use `dibs list --json` to read it, not the text.
+1. Look: `dibs list --json`, and read the JSON rather than the text.
 
-1. Claim it, naming yourself as an agent and saying what for:
+1. Claim it, saying what for:
 
    ```
-   DIBS_ASSISTED_BY="Claude Code:<your model id>" dibs claim <machine> --for "<what you are doing>"
+   DIBS_ASSISTED_BY=... DIBS_SESSION=... dibs claim <machine> --for "<what you are doing>"
    ```
 
-   Set `DIBS_ASSISTED_BY` on every dibs command, inline, so each one
-   agrees on who you are. It uses your human's login; you need no login
-   of your own.
-
-1. Exit status 1 means someone else holds it. Do not use the machine and
-   do not pass `--force`. Tell your human who holds it (the error says)
-   and ask what to do.
+1. Exit status 1 means someone else holds it, maybe another agent of
+   your human's. Do not use the machine and do not pass `--force`. Tell
+   your human who holds it (the error says) and ask what to do.
 
 Anything that goes through the BMC or affects the whole box needs the
 whole machine: power-cycling, the serial or graphical console, booting
@@ -49,17 +71,16 @@ Release what you claimed, and also when the work fails, is abandoned, or
 waits on your human for long:
 
 ```
-DIBS_ASSISTED_BY="Claude Code:<your model id>" dibs release --mine
+DIBS_ASSISTED_BY=... DIBS_SESSION=... dibs release --mine
 ```
 
-This releases only what you claimed, not your human's own claims.
+This releases only this session's claims: not your human's, and not
+other agents'.
 
 ## Never
 
 - Use a machine claimed by someone else, or one you have not claimed.
-- Pass `--force`, or release a claim you did not make.
+- Pass `--force`, or release a claim this session did not make.
+- Register or log in to dibs yourself.
 - Power-cycle, reflash, reboot or use the BMC of a machine when you hold
   only a part of it.
-
-If `dibs` is not installed or `DIBS_URL` is not set, stop and tell your
-human rather than going ahead without a claim.

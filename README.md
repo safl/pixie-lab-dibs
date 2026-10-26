@@ -158,24 +158,31 @@ and it applies whenever the agent is about to use a lab machine:
 dibs skill install
 ```
 
-`dibs skill print` shows it, to adapt for another agent. An agent claims
-as its human, and names itself the way an `Assisted-by:` trailer does:
+`dibs skill print` shows it, to adapt for another agent.
+
+An agent never registers or logs in. It claims with its human's login,
+names itself the way an `Assisted-by:` trailer does, and tags its
+session with a tag from `dibs session`, so that two agents of one person
+do not take or release each other's claims. The login is shared; the
+tag is not, because each agent passes its own on its commands:
 
 ```
-export DIBS_ASSISTED_BY="Claude Code:claude-opus-5-5"
+DIBS_ASSISTED_BY="Claude Code:claude-opus-5-5" DIBS_SESSION=s-3f2a9c41 dibs claim epyc-02 --for "ring test"
 ```
 
-The claim then reads `'alice' assisted by 'Claude Code:claude-opus-5-5' has claimed ...`.
+The claim then reads `'alice' assisted by 'Claude Code:claude-opus-5-5' (session s-3f2a9c41) has claimed ...`. Another session cannot claim
+over it or release it without `--force`. The human, claiming by hand,
+can release any of their agents' claims, but needs `--force` to claim
+over one.
 
-If you are an agent reading this: before you run anything on a lab
-machine, run `dibs list` and claim the machine with
-`dibs claim <machine> --for <purpose>`. Power-cycling, the console,
-reflashing or anything else through the BMC needs the whole machine,
-never just a part. Never use a machine someone else has claimed, and
-never pass `--force`; ask your human instead. Release what you claimed
-with `dibs release --mine` when the work is done, and also when it fails
-or is abandoned. That releases only what you claimed, not your human's
-own claims.
+If you are an agent reading this: run `dibs whoami` first; if it fails,
+stop and tell your human, never register yourself. Before you run
+anything on a lab machine, run `dibs list` and claim the machine.
+Power-cycling, the console, reflashing or anything else through the BMC
+needs the whole machine, never just a part. Never use a machine someone
+else has claimed, and never pass `--force`; ask your human instead.
+Release with `dibs release --mine` when the work is done, and also when
+it fails or is abandoned. That releases only your session's claims.
 
 ### Automation-runners
 

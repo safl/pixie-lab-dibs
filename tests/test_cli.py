@@ -293,3 +293,47 @@ def test_skill_body_drops_only_the_preamble() -> None:
     body = skill_body()
     assert body.startswith("# Claim lab machines with dibs\n")
     assert skill_text().endswith(body)
+
+
+def test_whoami_shows_the_actor(run: Run, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    assert run("whoami") == 0
+    assert capsys.readouterr().out == "'alice'\n"
+    monkeypatch.setenv("DIBS_ASSISTED_BY", "Claude Code:claude-opus-5-5")
+    monkeypatch.setenv("DIBS_SESSION", "s1")
+    assert run("whoami") == 0
+    assert (
+        capsys.readouterr().out
+        == "'alice' assisted by 'Claude Code:claude-opus-5-5' (session s1)\n"
+    )
+    assert run("whoami", "--json") == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "user": "alice",
+        "assisted_by": "Claude Code:claude-opus-5-5",
+        "session": "s1",
+    }
+    # With nobody logged in it fails, which is how an agent finds out.
+    assert run("whoami", who=None) == cli.EXIT_ERROR
+    assert "agents use their person's login" in capsys.readouterr().err
+
+
+def test_claims_carry_the_session(run: Run, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    monkeypatch.setenv("DIBS_ASSISTED_BY", "Claude Code:claude-opus-5-5")
+    monkeypatch.setenv("DIBS_SESSION", "s1")
+    assert run("claim", "warp", "--for", "x") == 0
+    assert "(session s1) has claimed 'warp'" in capsys.readouterr().out
+    monkeypatch.setenv("DIBS_SESSION", "s2")
+    assert run("claim", "warp", "--for", "y") == cli.EXIT_REFUSED
+    assert run("release", "--mine") == 0
+    assert capsys.readouterr().out.endswith("nothing to release\n")
+
+
+def test_session_tags_are_fresh_and_valid(capsys) -> None:
+    from dibs._store import validate_session
+
+    tags = set()
+    for _ in range(20):
+        assert cli.main(["session"]) == 0
+        tag = capsys.readouterr().out.strip()
+        assert validate_session(tag) == tag
+        tags.add(tag)
+    assert len(tags) == 20

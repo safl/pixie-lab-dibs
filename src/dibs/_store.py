@@ -17,6 +17,13 @@ claim on a thing conflicts with another user's claim on any of its parts,
 and a claim on a part conflicts with another user's claim on that part
 or on the thing.
 
+A claim is made by an **actor**: the user, and when an agent claims for
+them, the agent (``assisted_by``) and its session. One actor cannot claim
+over another's claim, even of the same user, so two agents of one person
+do not collide unnoticed. Releasing is the same, except that the user
+claiming by hand, without agent or session, may release any claim made
+under their name: an agent answers to its human.
+
 Every surface (``dibs``, the web page, the login hook on a machine)
 prints a claim as the same sentence, from :func:`sentence`.
 """
@@ -47,6 +54,9 @@ THING_NAME_RE = re.compile(rf"^{_LABEL}(\.{_LABEL})?$")
 PURPOSE_MAX = 128
 ASSISTED_BY_MAX = 64
 
+# Short, and plain, since it is typed into every command of a session.
+SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$")
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS things (
     name       TEXT PRIMARY KEY,
@@ -61,7 +71,8 @@ CREATE TABLE IF NOT EXISTS claims (
     assisted_by  TEXT NOT NULL DEFAULT '',
     purpose      TEXT NOT NULL,
     claimed_at   TEXT NOT NULL,
-    expires_at   TEXT NOT NULL DEFAULT ''
+    expires_at   TEXT NOT NULL DEFAULT '',
+    session      TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -117,6 +128,14 @@ def validate_assisted_by(raw: str) -> str:
     return _one_line("assisted_by", raw, ASSISTED_BY_MAX) if (raw or "").strip() else ""
 
 
+def validate_session(raw: str) -> str:
+    """Optional, so blank passes."""
+    value = (raw or "").strip()
+    if value and not SESSION_RE.match(value):
+        raise ValueError(f"session {value!r} must be letters, digits, . _ or -, at most 32 chars")
+    return value
+
+
 @dataclass
 class Thing:
     name: str
@@ -139,6 +158,12 @@ class Claim:
     an ``Assisted-by:`` trailer; blank for a claim made by hand."""
     expires_at: str = ""
     """Blank for a claim that never expires."""
+    session: str = ""
+    """Which of the holder's agent sessions made it; blank by hand."""
+
+    @property
+    def actor(self) -> tuple[str, str, str]:
+        return (self.holder, self.assisted_by, self.session)
 
     def is_live(self, now: datetime) -> bool:
         """A claim past its expiry counts as no claim: the thing is free
@@ -153,13 +178,15 @@ class Claim:
         }
         if self.assisted_by:
             out["assisted_by"] = self.assisted_by
+        if self.session:
+            out["session"] = self.session
         if self.expires_at:
             out["expires_at"] = self.expires_at
         return out
 
 
 class ClaimConflict(ValueError):
-    """One or more things are claimed by another user."""
+    """One or more things are claimed by another actor."""
 
     def __init__(self, blockers: Sequence[Claim], now: datetime) -> None:
         self.blockers = list(blockers)
@@ -188,6 +215,8 @@ def sentence(name: str, claim: Claim | None, now: datetime) -> str:
     who = f"'{claim.holder}'"
     if claim.assisted_by:
         who += f" assisted by '{claim.assisted_by}'"
+    if claim.session:
+        who += f" (session {claim.session})"
     return (
         f"{who} has claimed '{claim.thing}' for '{claim.purpose}' "
         f"expires in: '{remaining(claim.expires_at, now)}'"
@@ -222,6 +251,9 @@ class Store:
         self.db_path = Path(db_path)
         with self._conn() as conn:
             conn.executescript(_SCHEMA)
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(claims)")}
+            if "session" not in cols:  # a database from before sessions
+                conn.execute("ALTER TABLE claims ADD COLUMN session TEXT NOT NULL DEFAULT ''")
 
     @contextlib.contextmanager
     def _conn(self) -> Generator[sqlite3.Connection]:
@@ -283,23 +315,25 @@ class Store:
         holder: str,
         purpose: str,
         assisted_by: str = "",
+        session: str = "",
         expires_in: int | None = None,
         force: bool = False,
         now: datetime | None = None,
     ) -> builtins.list[tuple[Claim | None, Claim]]:
-        """Claim every thing in ``names`` for ``holder``, or none of them:
-        if any holds a live claim by another user (and ``force`` is off)
-        this raises :class:`ClaimConflict` and changes nothing.
-        Ownership is the user's: claiming again as the same holder, with
-        or without an agent, updates the purpose, expiry and
-        ``assisted_by`` and keeps ``claimed_at``. ``expires_in`` is
-        seconds from now; ``None`` never expires. Returns ``(before,
-        after)`` pairs so the caller can log what a ``force`` took over;
-        a forced claim on a thing also takes over other users' claims on
-        its parts, and those appear as pairs too. Callers check that the
-        things exist."""
+        """Claim every thing in ``names`` for the actor ``holder`` /
+        ``assisted_by`` / ``session``, or none of them: if any holds a live
+        claim by another actor (and ``force`` is off) this raises
+        :class:`ClaimConflict` and changes nothing. Claiming again as the
+        same actor updates the purpose and expiry and keeps
+        ``claimed_at``. ``expires_in`` is seconds from now; ``None`` never
+        expires. Returns ``(before, after)`` pairs so the caller can log
+        what a ``force`` took over; a forced claim on a thing also takes
+        over other actors' claims on its parts, and those appear as pairs
+        too. Callers check that the things exist."""
         purpose = validate_purpose(purpose)
         assisted_by = validate_assisted_by(assisted_by)
+        session = validate_session(session)
+        me = (holder, assisted_by, session)
         if expires_in is not None and expires_in <= 0:
             raise ValueError("expires_in must be a positive number of seconds")
         at = now or datetime.now(UTC)
@@ -308,7 +342,7 @@ class Store:
         with _WRITE_LOCK, self._conn() as conn:
             before = {n: self._claim_row(conn, n) for n in unique}
             live = {n: c for n, c in before.items() if c is not None and c.is_live(at)}
-            others = [c for c in self._live_rows(conn, at) if c.holder != holder]
+            others = [c for c in self._live_rows(conn, at) if c.actor != me]
             blockers = [c for c in others if any(overlaps(c.thing, n) for n in unique)]
             if blockers and not force:
                 raise ClaimConflict(blockers, at)
@@ -316,13 +350,21 @@ class Store:
             afters: dict[str, Claim] = {}
             for n in unique:
                 prior = live.get(n)
-                since = prior.claimed_at if prior and prior.holder == holder else ts(at)
-                after = afters[n] = Claim(n, holder, purpose, since, assisted_by, expires_at)
+                since = prior.claimed_at if prior and prior.actor == me else ts(at)
+                after = afters[n] = Claim(
+                    thing=n,
+                    holder=holder,
+                    purpose=purpose,
+                    claimed_at=since,
+                    assisted_by=assisted_by,
+                    expires_at=expires_at,
+                    session=session,
+                )
                 conn.execute(
                     "INSERT OR REPLACE INTO claims "
-                    "(thing, holder, assisted_by, purpose, claimed_at, expires_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (n, holder, assisted_by, purpose, since, expires_at),
+                    "(thing, holder, assisted_by, purpose, claimed_at, expires_at, session) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (n, holder, assisted_by, purpose, since, expires_at, session),
                 )
                 out.append((prior, after))
             for b in blockers:
@@ -337,34 +379,48 @@ class Store:
         names: Sequence[str],
         *,
         holder: str,
+        assisted_by: str = "",
+        session: str = "",
         force: bool = False,
         now: datetime | None = None,
     ) -> builtins.list[Claim]:
         """Release the claims on ``names``, all or nothing like
-        :meth:`claim`: releasing another user's live claim needs
-        ``force``. Expired claims are cleared whoever holds them. Returns
-        the live claims released."""
+        :meth:`claim`. Without ``force`` an actor may release its own
+        claims, and the user by hand (no agent, no session) may also
+        release its agents'. Expired claims are cleared whoever holds
+        them. Returns the live claims released."""
         at = now or datetime.now(UTC)
         unique = list(dict.fromkeys(names))
+        me = (holder, assisted_by.strip(), session.strip())
+        by_hand = not me[1] and not me[2]
+
+        def mine(c: Claim) -> bool:
+            return c.actor == me or (by_hand and c.holder == holder)
+
         with _WRITE_LOCK, self._conn() as conn:
             before = [c for c in (self._claim_row(conn, n) for n in unique) if c is not None]
-            blockers = [c for c in before if c.is_live(at) and c.holder != holder]
+            blockers = [c for c in before if c.is_live(at) and not mine(c)]
             if blockers and not force:
                 raise ClaimConflict(blockers, at)
             conn.executemany("DELETE FROM claims WHERE thing = ?", [(c.thing,) for c in before])
         return [c for c in before if c.is_live(at)]
 
     def claimed_by(
-        self, holder: str, assisted_by: str = "", *, now: datetime | None = None
+        self,
+        holder: str,
+        assisted_by: str = "",
+        session: str = "",
+        *,
+        now: datetime | None = None,
     ) -> builtins.list[Claim]:
-        """Live claims held by ``holder`` through exactly ``assisted_by``
-        (blank: claimed by hand), so an agent's ``release --mine`` leaves
-        its human's own claims alone."""
+        """Live claims of exactly this actor, so an agent's ``release
+        --mine`` leaves its human's and its other sessions' claims alone."""
         at = now or datetime.now(UTC)
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM claims WHERE holder = ? AND assisted_by = ? ORDER BY thing",
-                (holder, assisted_by.strip()),
+                "SELECT * FROM claims WHERE holder = ? AND assisted_by = ? AND session = ? "
+                "ORDER BY thing",
+                (holder, assisted_by.strip(), session.strip()),
             ).fetchall()
         return [c for c in (Claim(**dict(r)) for r in rows) if c.is_live(at)]
 

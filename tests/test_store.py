@@ -29,8 +29,12 @@ def test_sentence_free_claimed_and_assisted(store: Store) -> None:
     assert sentence("node-01", c, T0) == (
         "'alice' has claimed 'node-01' for 'xnvme' expires in: 'never'"
     )
-    [(_, c)] = store.claim(["node-01"], holder="alice", purpose="x", assisted_by=AGENT, now=T0)
-    assert sentence("node-01", c, T0).startswith(f"'alice' assisted by '{AGENT}' has claimed")
+    [(_, c)] = store.claim(
+        ["node-02"], holder="alice", purpose="x", assisted_by=AGENT, session="s1", now=T0
+    )
+    assert sentence("node-02", c, T0).startswith(
+        f"'alice' assisted by '{AGENT}' (session s1) has claimed 'node-02'"
+    )
 
 
 @pytest.mark.parametrize(
@@ -66,11 +70,61 @@ def test_claim_is_all_or_nothing(store: Store) -> None:
     assert store.get_claim("a") is None
 
 
-def test_an_agent_and_its_human_do_not_block_each_other(store: Store) -> None:
+def test_two_agent_sessions_of_one_user_conflict(store: Store) -> None:
+    store.claim(["a"], holder="alice", purpose="x", assisted_by=AGENT, session="s1", now=T0)
+    with pytest.raises(ClaimConflict) as exc:
+        store.claim(["a"], holder="alice", purpose="y", assisted_by=AGENT, session="s2", now=T0)
+    assert "(session s1)" in exc.value.sentences[0]
+    with pytest.raises(ClaimConflict):
+        store.release(["a"], holder="alice", assisted_by=AGENT, session="s2", now=T0)
+    # The same session claiming again just updates its claim.
+    store.claim(["a"], holder="alice", purpose="z", assisted_by=AGENT, session="s1", now=T0)
+    assert store.get_claim("a").purpose == "z"  # type: ignore[union-attr]
+
+
+def test_an_agent_cannot_take_or_release_its_humans_claim(store: Store) -> None:
     store.claim(["a"], holder="alice", purpose="x", now=T0)
-    store.claim(["a"], holder="alice", purpose="y", assisted_by=AGENT, now=T0)
-    store.release(["a"], holder="alice", now=T0)
-    assert store.get_claim("a") is None
+    with pytest.raises(ClaimConflict):
+        store.claim(["a"], holder="alice", purpose="y", assisted_by=AGENT, session="s1", now=T0)
+    with pytest.raises(ClaimConflict):
+        store.release(["a"], holder="alice", assisted_by=AGENT, session="s1", now=T0)
+
+
+def test_the_human_may_release_their_agents_claims(store: Store) -> None:
+    store.claim(["a"], holder="alice", purpose="x", assisted_by=AGENT, session="s1", now=T0)
+    # Claiming over it still needs force, so nothing is overwritten unnoticed...
+    with pytest.raises(ClaimConflict):
+        store.claim(["a"], holder="alice", purpose="y", now=T0)
+    # ...but cleaning up after one's own agent does not.
+    assert [c.thing for c in store.release(["a"], holder="alice", now=T0)] == ["a"]
+
+
+def test_another_users_human_may_not_release_my_agents_claim(store: Store) -> None:
+    store.claim(["a"], holder="alice", purpose="x", assisted_by=AGENT, session="s1", now=T0)
+    with pytest.raises(ClaimConflict):
+        store.release(["a"], holder="bob", now=T0)
+
+
+def test_old_database_gains_sessions(tmp_path: Path) -> None:
+    import sqlite3
+
+    db = tmp_path / "old.db"
+    conn = sqlite3.connect(str(db))
+    conn.executescript(
+        "CREATE TABLE claims (thing TEXT PRIMARY KEY, holder TEXT NOT NULL, "
+        "assisted_by TEXT NOT NULL DEFAULT '', purpose TEXT NOT NULL, claimed_at TEXT NOT NULL, "
+        "expires_at TEXT NOT NULL DEFAULT '');"
+        "INSERT INTO claims (thing, holder, purpose, claimed_at) VALUES ('a', 'alice', 'x', 'y');"
+    )
+    conn.commit()
+    conn.close()
+    assert Store(db).get_claim("a").session == ""  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize("raw", ["-x", "a b", "x" * 33, "a/b"])
+def test_bad_sessions_are_refused(store: Store, raw: str) -> None:
+    with pytest.raises(ValueError):
+        store.claim(["a"], holder="alice", purpose="x", session=raw, now=T0)
 
 
 def test_force_takeover_reports_previous_holder(store: Store) -> None:
@@ -99,12 +153,13 @@ def test_release_rules(store: Store) -> None:
     assert store.get_claim("b") is None
 
 
-def test_claimed_by_is_scoped_to_assisted_by(store: Store) -> None:
+def test_claimed_by_is_scoped_to_the_actor(store: Store) -> None:
     store.claim(["a"], holder="alice", purpose="x", now=T0)
-    store.claim(["b"], holder="alice", purpose="y", assisted_by=AGENT, now=T0)
+    store.claim(["b"], holder="alice", purpose="y", assisted_by=AGENT, session="s1", now=T0)
+    store.claim(["d"], holder="alice", purpose="y", assisted_by=AGENT, session="s2", now=T0)
     store.claim(["c"], holder="alice", purpose="z", expires_in=60, now=T0 - timedelta(hours=1))
     assert [c.thing for c in store.claimed_by("alice", now=T0)] == ["a"]
-    assert [c.thing for c in store.claimed_by("alice", AGENT, now=T0)] == ["b"]
+    assert [c.thing for c in store.claimed_by("alice", AGENT, "s1", now=T0)] == ["b"]
 
 
 @pytest.mark.parametrize(
