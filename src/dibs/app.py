@@ -30,6 +30,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 import dibs
+from dibs._skill import skill_body
 from dibs._sources import Config, PixieSource, load_config, sync
 from dibs._store import Claim, ClaimConflict, Store, Thing, covering, describe, sentence
 from dibs._users import DuplicateUser, LoginFailed, NotApproved, UsersStore
@@ -297,6 +298,16 @@ def create_app(
         login. It points back at whichever dibs URL fetched it."""
         return PlainTextResponse(LOGIN_HOOK.format(base=str(request.base_url)))
 
+    @app.get("/agents", response_class=PlainTextResponse)
+    def agents(request: Request) -> PlainTextResponse:
+        """How to use dibs on this lab, for a person or an agent pointed at
+        it: the setup with this server's URL filled in, what is claimed
+        right now, then the protocol from the agent skill."""
+        base = str(request.base_url).rstrip("/")
+        now_lines = "\n".join(f"- {t['sentence']}" for t in list_things()["things"])
+        page = AGENTS_PAGE.format(base=base, now=now_lines or "- nothing to claim yet")
+        return PlainTextResponse(page + "\n" + skill_body(), media_type="text/plain; charset=utf-8")
+
     @app.get("/", response_class=HTMLResponse)
     def index() -> HTMLResponse:
         rows = list_things()["things"]
@@ -337,6 +348,30 @@ case $- in *i*)
 esac
 """
 
+AGENTS_PAGE = """\
+# dibs on this lab
+
+The machines on this lab are shared by people, ai-agents and
+automation-runners, and claimed with dibs at {base}. Read this before you
+touch any of them.
+
+## Set up, once per machine you work from
+
+```
+uv tool install pixie-lab-dibs
+export DIBS_URL={base}
+dibs register <your name>      # then ask the lab's admin to approve you
+dibs login
+```
+
+An agent uses its human's login and needs none of its own. For Claude
+Code, `dibs skill install` makes the rules below load by themselves.
+
+## Right now
+
+{now}
+"""
+
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>dibs</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -347,7 +382,8 @@ td, th {{ text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ddd;
 </style></head><body>
 <h1>dibs</h1>
 <p>Who is using which thing. Claim one with
-<code>dibs claim &lt;name&gt; --for &lt;purpose&gt;</code>.</p>
+<code>dibs claim &lt;name&gt; --for &lt;purpose&gt;</code>.
+New here, or an agent? Read <a href="/agents">/agents</a>.</p>
 <table><thead><tr><th>Name</th><th>Kind</th><th>Claim</th></tr></thead>
 <tbody>
 {rows}

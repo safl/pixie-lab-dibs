@@ -176,3 +176,18 @@ def test_parts_over_the_api(client: TestClient, tokens, tmp_path: Path) -> None:
     # The login hook on ryzen-01 (by MAC) sees the part's claim.
     hook = client.get("/claim", params={"mac": "aa:bb:cc:dd:ee:60"}).text
     assert hook.startswith("'bob' has claimed 'ryzen-01.bmc'")
+
+
+def test_agents_page_is_set_up_for_this_server(client: TestClient, tokens) -> None:
+    from dibs._skill import skill_body
+
+    _claim(client, tokens, "warp")
+    r = client.get("/agents")
+    assert r.headers["content-type"].startswith("text/plain")
+    page = r.text
+    assert "export DIBS_URL=http://testserver\n" in page
+    assert "- 'alice' has claimed 'warp' for 'xnvme' expires in: 'never'" in page
+    assert page.endswith(skill_body())
+    # The skill's Claude Code frontmatter and licence comment are not for this reader.
+    assert "name: dibs" not in page and "SPDX" not in page
+    assert '<a href="/agents">' in client.get("/").text

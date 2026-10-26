@@ -550,13 +550,13 @@ def cmd_admin_revoke(args: argparse.Namespace) -> None:
 
 # ---- agent skill -----------------------------------------------------------
 
-SKILL = Path(__file__).parent / "skill" / "SKILL.md"
-
 
 def cmd_skill(args: argparse.Namespace) -> None:
     """Install the Claude Code skill that teaches an agent to claim
     machines before using them, or print it for another agent's setup."""
-    text = SKILL.read_text()
+    from dibs._skill import skill_text
+
+    text = skill_text()
     if args.action == "print":
         sys.stdout.write(text)
         return

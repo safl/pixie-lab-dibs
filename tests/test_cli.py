@@ -285,3 +285,11 @@ def test_skill_ships_in_the_wheel(tmp_path: Path) -> None:
     )
     wheel = next(tmp_path.glob("*.whl"))
     assert "dibs/skill/SKILL.md" in zipfile.ZipFile(wheel).namelist()
+
+
+def test_skill_body_drops_only_the_preamble() -> None:
+    from dibs._skill import skill_body, skill_text
+
+    body = skill_body()
+    assert body.startswith("# Claim lab machines with dibs\n")
+    assert skill_text().endswith(body)
