@@ -6,12 +6,12 @@ SPDX-License-Identifier: BSD-3-Clause
 
 # dibs
 
-[![test](https://github.com/safl/dibs/actions/workflows/test.yml/badge.svg)](https://github.com/safl/dibs/actions/workflows/test.yml)
-[![format](https://github.com/safl/dibs/actions/workflows/format.yml/badge.svg)](https://github.com/safl/dibs/actions/workflows/format.yml)
+[![test](https://github.com/safl/pixie-lab-dibs/actions/workflows/test.yml/badge.svg)](https://github.com/safl/pixie-lab-dibs/actions/workflows/test.yml)
+[![format](https://github.com/safl/pixie-lab-dibs/actions/workflows/format.yml/badge.svg)](https://github.com/safl/pixie-lab-dibs/actions/workflows/format.yml)
 [![PyPI](https://img.shields.io/pypi/v/pixie-lab-dibs)](https://pypi.org/project/pixie-lab-dibs/)
 [![Python](https://img.shields.io/pypi/pyversions/pixie-lab-dibs)](https://pypi.org/project/pixie-lab-dibs/)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
-[![REUSE status](https://api.reuse.software/badge/github.com/safl/dibs)](https://api.reuse.software/info/github.com/safl/dibs)
+[![REUSE status](https://api.reuse.software/badge/github.com/safl/pixie-lab-dibs)](https://api.reuse.software/info/github.com/safl/pixie-lab-dibs)
 
 Call dibs on shared lab machines.
 

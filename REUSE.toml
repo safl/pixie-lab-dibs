@@ -8,9 +8,9 @@
 
 version = 1
 
-SPDX-PackageName = "dibs"
+SPDX-PackageName = "pixie-lab-dibs"
 SPDX-PackageSupplier = "Simon A. F. Lund <os@safl.dk>"
-SPDX-PackageDownloadLocation = "https://github.com/safl/dibs"
+SPDX-PackageDownloadLocation = "https://github.com/safl/pixie-lab-dibs"
 
 [[annotations]]
 path = ["LICENSE", "uv.lock"]

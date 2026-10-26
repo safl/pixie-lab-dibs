@@ -420,7 +420,7 @@ PrivateTmp=yes"""
     return f"""# Written by: dibs server install{" --user" if user else ""}
 [Unit]
 Description=dibs: who is using which lab machine
-Documentation=https://github.com/safl/dibs
+Documentation=https://github.com/safl/pixie-lab-dibs
 After=network-online.target
 Wants=network-online.target
 

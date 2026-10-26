@@ -41,7 +41,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/safl/dibs"
+Homepage = "https://github.com/safl/pixie-lab-dibs"
 
 [project.scripts]
 dibs = "dibs.cli:main"
