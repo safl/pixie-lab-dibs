@@ -41,6 +41,7 @@ EXIT_ERROR = 2
 
 DEFAULT_PORT = 8090
 UNIT_NAME = "dibs.service"
+SERVICE_USER = "dibs"
 
 _DURATION_RE = re.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$")
 _DEFAULT_KEYS = ("id_ed25519.pub", "id_ecdsa.pub", "id_rsa.pub")
@@ -405,10 +406,12 @@ ConfigurationDirectory=dibs
 Restart=on-failure"""
         target = "default.target"
     else:
-        # DynamicUser gives the service a throwaway system user that owns
-        # only its StateDirectory, so it needs no account set up.
+        # A static user rather than DynamicUser=: ssh-keygen looks its own
+        # user up, and a dynamic user resolves only where nss-systemd is set
+        # up, which plain Debian does not do.
         service = f"""ExecStart={serve}
-DynamicUser=yes
+User={SERVICE_USER}
+Group={SERVICE_USER}
 StateDirectory=dibs
 ConfigurationDirectory=dibs
 Restart=on-failure
@@ -444,6 +447,25 @@ def _systemctl(user: bool, *argv: str) -> None:
         raise CliError(f"{' '.join(cmd)} failed")
 
 
+def ensure_service_user() -> None:
+    """Create the ``dibs`` system user the system service runs as, once."""
+    if subprocess.run(["getent", "passwd", SERVICE_USER], capture_output=True).returncode == 0:
+        return
+    cmd = [
+        "useradd",
+        "--system",
+        "--user-group",
+        "--home-dir",
+        "/var/lib/dibs",
+        "--no-create-home",
+        "--shell",
+        "/usr/sbin/nologin",
+        SERVICE_USER,
+    ]
+    if subprocess.run(cmd).returncode != 0:
+        raise CliError(f"{' '.join(cmd)} failed; run dibs server install as root")
+
+
 def cmd_server_install(args: argparse.Namespace) -> None:
     exe = _exe()
     if not args.user and str(exe).startswith(str(Path.home())):
@@ -455,6 +477,8 @@ def cmd_server_install(args: argparse.Namespace) -> None:
     if args.print:
         sys.stdout.write(text)
         return
+    if not args.user:
+        ensure_service_user()
     path = unit_path(args.user)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)

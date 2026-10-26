@@ -128,7 +128,7 @@ def test_system_unit_runs_this_dibs_sandboxed() -> None:
     text = cli.unit_text(Path("/usr/local/bin/dibs"), user=False, host="0.0.0.0", port=8090)
     assert "ExecStart=/usr/local/bin/dibs serve --host 0.0.0.0 --port 8090\n" in text
     for line in (
-        "DynamicUser=yes",
+        "User=dibs",
         "StateDirectory=dibs",
         "ProtectHome=yes",
         "WantedBy=multi-user.target",
@@ -173,6 +173,29 @@ def test_server_install_writes_enables_and_controls(
         "--now",
         "dibs.service",
     ]
+
+
+def test_system_unit_avoids_dynamic_user() -> None:
+    """ssh-keygen needs its user to resolve, and a DynamicUser= user does
+    not resolve without nss-systemd (plain Debian has none)."""
+    text = cli.unit_text(Path("/usr/local/bin/dibs"), user=False, host="0.0.0.0", port=8090)
+    assert "DynamicUser" not in text and "User=dibs\nGroup=dibs\n" in text
+
+
+@pytest.mark.parametrize(("exists", "want_useradd"), [(True, False), (False, True)])
+def test_service_user_is_created_once(
+    monkeypatch: pytest.MonkeyPatch, exists: bool, want_useradd: bool
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(cmd: list[str], *a: Any, **kw: Any) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0 if exists or cmd[0] != "getent" else 2)
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    cli.ensure_service_user()
+    assert calls[0] == ["getent", "passwd", "dibs"]
+    assert any(c[0] == "useradd" and c[-1] == "dibs" for c in calls) == want_useradd
 
 
 def test_system_install_refuses_a_dibs_in_home(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
