@@ -59,8 +59,9 @@ sudo dibs server install
 
 The command writes a systemd unit for the `dibs` you ran, enables it
 and starts it. `dibs server start`, `stop`, `restart`, `status` and
-`logs` manage it from then on. The service runs as a throwaway system
-user that owns only `/var/lib/dibs`. Without root, `dibs server install --user` installs a per-user service instead. For a quick try,
+`logs` manage it from then on. The service runs as a `dibs` system
+user, which the install creates, with write access only to
+`/var/lib/dibs`. Without root, `dibs server install --user` installs a per-user service instead. For a quick try,
 `dibs serve` runs the server in the foreground.
 
 The system service can only run a `dibs` installed outside your home
