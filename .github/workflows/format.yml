@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: format
+
+# Only the default branch on push. Every other branch is covered by the pull
+# request event, and running both would check each commit twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: make format
+        run: make format
+
+      # Most hooks fail when they rewrite a file, so the step above catches
+      # them. This catches the ones that would fix something and exit zero.
+      - name: Verify nothing changed
+        run: git diff --exit-code
+
+      - name: Show what changed
+        if: failure()
+        run: git --no-pager diff

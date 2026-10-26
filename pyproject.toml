@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "calldibs"
+dynamic = ["version"]  # single source of truth: src/dibs/__init__.py:__version__
+description = "Call dibs on shared lab machines: see who is using what, claim it, release it"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "Simon A. F. Lund", email = "os@safl.dk" }]
+keywords = ["lab", "claims", "reservation", "pixie", "coordination"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    # The client, and the server's pixie source.
+    "httpx>=0.27",
+    # ``dibs list/info --toml`` and ``--yaml``.
+    "tomlkit>=0.12",
+    "pyyaml>=6",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "types-PyYAML>=6",
+]
+
+[project.urls]
+Homepage = "https://github.com/safl/dibs"
+
+[project.scripts]
+dibs = "dibs.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dibs"]
+
+[tool.hatch.version]
+path = "src/dibs/__init__.py"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+
+[tool.mypy]
+strict = true
+files = ["src"]

@@ -1,0 +1,53 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# The license texts under LICENSES/ are kept away from the hooks that rewrite
+# files. Editing a license to suit a formatter is the one thing that must never
+# happen to one, whatever the formatter thinks of its whitespace.
+exclude: ^LICENSES/
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.2
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: https://github.com/hukkin/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        # Pinned because `pre-commit autoupdate` does not touch these, so an
+        # unpinned release would change formatting on an unrelated commit and
+        # fail CI there.
+        additional_dependencies:
+          - mdformat-gfm==1.0.0
+
+  - repo: https://github.com/fsfe/reuse-tool
+    rev: v6.2.0
+    hooks:
+      - id: reuse
+
+  - repo: local
+    hooks:
+      # Alternation, not a character class: pygrep matches on bytes, so a class
+      # of multi-byte characters becomes a class of their individual bytes and
+      # then flags unrelated letters. "æ" shares a byte with "…".
+      - id: ascii-punctuation
+        name: ASCII punctuation only
+        language: pygrep
+        entry: '(—|–|‘|’|“|”|…|→|←|•)'
+        types: [text]
+        exclude: ^\.pre-commit-config\.yaml$

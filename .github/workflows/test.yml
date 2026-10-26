@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+name: test
+
+# Only the default branch on push. Every other branch is covered by the pull
+# request event, and running both would check each commit twice.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest and newest Python dibs supports.
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7.2.1
+        with:
+          python-version: ${{ matrix.python }}
+
+      # The login tests sign and verify with ssh-keygen, which the runner
+      # image ships; they skip rather than pass if it is ever missing, so
+      # fail here instead.
+      - name: Check ssh-keygen is present
+        run: ssh-keygen -Y 2>&1 | grep -q sign
+
+      - name: make check
+        run: make check
+
+      - name: make build
+        run: make build

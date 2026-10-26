@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Simon A. F. Lund <os@safl.dk>
+#
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Copyright and licensing for the files that cannot carry a comment header:
+# the root LICENSE that GitHub reads, and the generated uv.lock. Everything
+# else states it in its own header, where it stays attached to the file.
+
+version = 1
+
+SPDX-PackageName = "dibs"
+SPDX-PackageSupplier = "Simon A. F. Lund <os@safl.dk>"
+SPDX-PackageDownloadLocation = "https://github.com/safl/dibs"
+
+[[annotations]]
+path = ["LICENSE", "uv.lock"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "Simon A. F. Lund <os@safl.dk>"
+SPDX-License-Identifier = "BSD-3-Clause"
