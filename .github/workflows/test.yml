@@ -40,3 +40,24 @@ jobs:
 
       - name: make build
         run: make build
+
+  service:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7.2.1
+
+      # The pixie server dibs first ran on resolves users from files only,
+      # without nss-systemd. Match it, so a unit that relies on systemd's
+      # dynamic users fails here rather than there.
+      - name: Resolve users from /etc/passwd only
+        run: |
+          sudo sed -i 's/^passwd:.*/passwd: files/' /etc/nsswitch.conf
+          grep '^passwd' /etc/nsswitch.conf
+
+      - name: make build
+        run: make build
+
+      - name: make service-smoke
+        run: make service-smoke

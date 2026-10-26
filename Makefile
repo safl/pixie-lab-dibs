@@ -9,7 +9,7 @@ UV ?= uv
 PRECOMMIT ?= pre-commit
 
 .DEFAULT_GOAL := help
-.PHONY: help format lint typecheck test build check
+.PHONY: help format lint typecheck test build check service-smoke
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -35,3 +35,6 @@ build: ## Build the sdist and wheel, and check every command the wheel installs 
 	done
 
 check: lint typecheck test ## Everything but format
+
+service-smoke: ## Install the built wheel as the real service and claim against it (sudo, systemd)
+	./scripts/service-smoke.sh
