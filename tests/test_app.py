@@ -189,10 +189,10 @@ def test_agents_page_is_set_up_for_this_server(client: TestClient, tokens) -> No
     r = client.get("/agents")
     assert r.headers["content-type"].startswith("text/plain")
     page = r.text
-    assert "echo 'export DIBS_URL=http://testserver' >> ~/.bashrc" in page
-    assert "DIBS_URL=http://testserver dibs whoami" in page
+    assert "dibs --url http://testserver register <name>" in page
+    assert "   dibs whoami\n" in page
     assert "If you are a person" in page and "If you are an agent" in page
-    assert "Agents never\nregister" in page
+    assert "Agents never register" in " ".join(page.split())
     assert "- 'alice' has claimed 'warp' for 'xnvme' expires in: 'never'" in page
     assert page.endswith(skill_body())
     # The skill's Claude Code frontmatter and licence comment are not for this reader.

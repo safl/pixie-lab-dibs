@@ -10,6 +10,13 @@ Follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- The client remembers the server it last registered or logged in to,
+  so only `register` needs `--url`, and `DIBS_URL` is only for picking
+  another server. Agents no longer pass `DIBS_URL` on every command.
+  `dibs whoami` shows the server too.
+
 ### Fixed
 
 - `dibs register` with a name that is already registered crashed with a

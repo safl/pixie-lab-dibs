@@ -377,31 +377,31 @@ touches it. Read the part for you.
 
 ```
 uv tool install pixie-lab-dibs
-echo 'export DIBS_URL={base}' >> ~/.bashrc
-dibs register <name>     # then ask the lab's admin to approve you
+dibs --url {base} register <name>     # then ask the lab's admin to approve you
 dibs login
 dibs skill install       # Claude Code agents then follow the rules below by themselves
 ```
 
-Every agent you run on this workstation uses this login. Agents never
-register or log in themselves.
+dibs remembers this server, so no command after `register` needs the
+URL. Every agent you run on this workstation uses this login. Agents
+never register or log in themselves.
 
 ## If you are an agent: before anything else
 
 1. Check that your human has set up this workstation:
 
    ```
-   DIBS_URL={base} dibs whoami
+   dibs whoami
    ```
 
-   It prints your human's name. If it fails, stop, and give your human the
-   setup above. Do not register or log in yourself.
+   It prints your human's name and {base}. If it fails, stop, and give
+   your human the setup above. Do not register or log in yourself.
 
 1. Get a session tag for this conversation, once, with `dibs session`, and
    pass it, with who you are, on every dibs command:
 
    ```
-   DIBS_URL={base} DIBS_ASSISTED_BY="Claude Code:<model>" DIBS_SESSION=<tag> dibs ...
+   DIBS_ASSISTED_BY="Claude Code:<model>" DIBS_SESSION=<tag> dibs ...
    ```
 
    Your claims then say which agent made them, and no other agent of the

@@ -23,10 +23,10 @@ logging in to a machine someone else holds, so it is on you not to.
    dibs whoami
    ```
 
-   It prints your human's name. If it fails, or `dibs` or `DIBS_URL` is
-   missing, stop and tell your human to read `$DIBS_URL/agents`, or the
-   dibs README. Never run `dibs register` or `dibs login` yourself: you
-   claim with your human's login.
+   It prints your human's name and the dibs server. If it fails, or
+   `dibs` is missing, stop and tell your human to read `/agents` on their
+   dibs server, or the dibs README. Never run `dibs register` or
+   `dibs login` yourself: you claim with your human's login.
 
 1. Get a session tag for this conversation, once, with `dibs session`.
    It prints a random tag such as `s-3f2a9c41`. Do not make one up: two

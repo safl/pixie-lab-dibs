@@ -11,9 +11,10 @@ approves users by working on the server's database directly.
 
 Everywhere else: ``dibs register`` and ``dibs login`` get you a token,
 and ``dibs list``, ``info``, ``claim`` and ``release`` use it. The client
-finds the server with ``--url`` or ``DIBS_URL``, keeps its token per URL
-in ``$XDG_CONFIG_HOME/dibs/client.json`` (``DIBS_TOKEN`` overrides it, for
-runners), and an agent sets ``DIBS_ASSISTED_BY`` (``Agent:model``, as in
+finds the server with ``--url``, else ``DIBS_URL``, else the server it
+last registered or logged in to. It keeps that, and its token per URL, in
+``$XDG_CONFIG_HOME/dibs/client.json`` (``DIBS_TOKEN`` overrides the token,
+for runners), and an agent sets ``DIBS_ASSISTED_BY`` (``Agent:model``, as in
 an ``Assisted-by:`` trailer) and ``DIBS_SESSION`` (a tag for this agent
 session) so its claims say which agent made them and other agents of the
 same person leave them alone.
@@ -213,9 +214,24 @@ def dump(data: dict[str, Any], fmt: str) -> str:
 
 
 def _url(args: argparse.Namespace) -> str:
-    if not args.url:
-        raise CliError("set DIBS_URL (or pass --url), e.g. http://dibs:8090")
-    return str(args.url)
+    url = args.url or _load_client().get("default_url")
+    if not url:
+        raise CliError(
+            "which dibs server? run: dibs --url http://<server>:8090 login "
+            "(or set DIBS_URL); agents ask their person to set up"
+        )
+    return str(url)
+
+
+def _remember_server(url: str) -> None:
+    """Make ``url`` the server later commands use without ``--url``."""
+    data = _load_client()
+    data["default_url"] = url.rstrip("/")
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(data, f, indent=2)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
@@ -356,6 +372,7 @@ def cmd_register(args: argparse.Namespace) -> None:
         raise CliError(f"cannot read {key}: {exc}") from exc
     answer = _request(url, "POST", "/auth/register", {"user": args.user, "pubkey": pubkey})
     _save(url, user=answer["user"], key=str(key), token=None)
+    _remember_server(url)
     print(f"Registered '{answer['user']}' with key {answer['fingerprint']}.")
     print(f"Ask the dibs admin to run: dibs admin approve {answer['user']}")
     print(f"Then: dibs login {answer['user']}")
@@ -372,7 +389,8 @@ def cmd_login(args: argparse.Namespace) -> None:
     body = {"user": user, "nonce": challenge["nonce"], "signature": sign(key, challenge["message"])}
     answer = _request(url, "POST", "/auth/login", body)
     _save(url, user=answer["user"], key=str(key), token=answer["token"])
-    print(f"Logged in as '{answer['user']}'.")
+    _remember_server(url)
+    print(f"Logged in as '{answer['user']}' at {url.rstrip('/')}.")
 
 
 def cmd_whoami(args: argparse.Namespace) -> None:
@@ -380,7 +398,7 @@ def cmd_whoami(args: argparse.Namespace) -> None:
     and the agent and session from the environment. Fails when nobody
     has logged in, which is how an agent learns setup is missing."""
     url = _url(args)
-    me: dict[str, str] = {"user": _request(url, "GET", "/auth/whoami")["user"]}
+    me: dict[str, str] = {"user": _request(url, "GET", "/auth/whoami")["user"], "server": url}
     if assisted_by():
         me["assisted_by"] = assisted_by()
     if session():
@@ -393,7 +411,7 @@ def cmd_whoami(args: argparse.Namespace) -> None:
         line += f" assisted by '{me['assisted_by']}'"
     if "session" in me:
         line += f" (session {me['session']})"
-    print(line)
+    print(f"{line} at {url}")
 
 
 def cmd_session(args: argparse.Namespace) -> None:
@@ -680,14 +698,19 @@ def build_parser() -> argparse.ArgumentParser:
             "unless you say so."
         ),
         epilog=(
-            "The client finds the server via --url or DIBS_URL. Claiming needs a login: "
+            "The client finds the server via --url, DIBS_URL, or the server you last "
+            "logged in to. Claiming needs a login: "
             "register, have the admin approve you, then login. Agents set "
             "DIBS_ASSISTED_BY and DIBS_SESSION; runners may pass a token in DIBS_TOKEN. "
             "Exit status: 0 done, "
             "1 claimed by someone else, 2 other errors."
         ),
     )
-    parser.add_argument("--url", default=os.environ.get("DIBS_URL", ""), help="dibs server URL")
+    parser.add_argument(
+        "--url",
+        default=os.environ.get("DIBS_URL", ""),
+        help="dibs server URL (default: DIBS_URL, else the server you logged in to)",
+    )
     sub = parser.add_subparsers(dest="cmd", required=True, metavar="command")
 
     data = argparse.ArgumentParser(add_help=False)

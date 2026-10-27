@@ -73,8 +73,7 @@ directory, for example with
 Claiming needs a user. Register a name with your SSH public key:
 
 ```
-export DIBS_URL=http://dibs:8090
-dibs register alice
+dibs --url http://dibs:8090 register alice
 ```
 
 The admin approves it on the server host:
@@ -91,7 +90,9 @@ gets back:
 dibs login
 ```
 
-The token does not expire; `dibs logout` drops it, and
+dibs remembers the server you registered or logged in to, so no later
+command needs the URL; `--url` or `DIBS_URL` still pick another. The
+token does not expire; `dibs logout` drops it, and
 `dibs admin revoke alice` ends every login alice has. `-i` picks a key
 other than `~/.ssh/id_ed25519.pub`.
 

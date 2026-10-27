@@ -83,7 +83,7 @@ def test_register_login_logout(run: Run, client: TestClient, ssh_key: Path, caps
     assert "waiting for admin approval" in capsys.readouterr().err
     client.app.state.users.approve("carol")  # type: ignore[attr-defined]
     assert run("login", who=None) == 0
-    assert capsys.readouterr().out == "Logged in as 'carol'.\n"
+    assert capsys.readouterr().out == "Logged in as 'carol' at http://dibs.\n"
     assert oct(cli.config_path().stat().st_mode & 0o777) == "0o600"
     assert run("claim", "warp", "--for", "xnvme", who=None) == 0
     assert "'carol' has claimed 'warp'" in capsys.readouterr().out
@@ -297,17 +297,18 @@ def test_skill_body_drops_only_the_preamble() -> None:
 
 def test_whoami_shows_the_actor(run: Run, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
     assert run("whoami") == 0
-    assert capsys.readouterr().out == "'alice'\n"
+    assert capsys.readouterr().out == "'alice' at http://dibs\n"
     monkeypatch.setenv("DIBS_ASSISTED_BY", "Claude Code:claude-opus-5-5")
     monkeypatch.setenv("DIBS_SESSION", "s1")
     assert run("whoami") == 0
     assert (
         capsys.readouterr().out
-        == "'alice' assisted by 'Claude Code:claude-opus-5-5' (session s1)\n"
+        == "'alice' assisted by 'Claude Code:claude-opus-5-5' (session s1) at http://dibs\n"
     )
     assert run("whoami", "--json") == 0
     assert json.loads(capsys.readouterr().out) == {
         "user": "alice",
+        "server": "http://dibs",
         "assisted_by": "Claude Code:claude-opus-5-5",
         "session": "s1",
     }
@@ -345,3 +346,21 @@ def test_registering_a_taken_name_is_an_error_not_a_crash(run: Run, ssh_key: Pat
     capsys.readouterr()
     assert run("register", "erin", "-i", pub, who=None) == cli.EXIT_ERROR
     assert "already registered" in capsys.readouterr().err
+
+
+def test_the_server_is_remembered_after_login(
+    run: Run, client: TestClient, ssh_key: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    pub = str(ssh_key.with_suffix(".pub"))
+    assert run("register", "frank", "-i", pub, who=None) == 0
+    client.app.state.users.approve("frank")  # type: ignore[attr-defined]
+    assert run("login", who=None) == 0
+    capsys.readouterr()
+    # No DIBS_URL and no --url: the server comes from the login.
+    monkeypatch.delenv("DIBS_URL")
+    assert run("whoami", who=None) == 0
+    assert capsys.readouterr().out == "'frank' at http://dibs\n"
+    # --url still wins over the remembered server: there is no login saved
+    # for this other one, so it is not logged in.
+    assert cli.main(["--url", "http://elsewhere", "whoami"]) == cli.EXIT_ERROR
+    assert "not logged in" in capsys.readouterr().err
